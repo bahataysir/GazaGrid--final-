@@ -1,0 +1,8 @@
+streamlit>=1.31.0
+streamlit-folium>=0.15.0
+folium>=0.15.0
+pandas>=2.0.0
+numpy>=1.24.0
+qiskit>=0.45.0
+qiskit-aer>=0.13.0
+qiskit-algorithms>=0.2.0
