@@ -6,396 +6,354 @@ from streamlit_folium import folium_static
 import json
 import os
 import sys
-from quantum_logic import QuantumEnergyOptimizer
+# تأكد من وجود ملف quantum_logic.py في نفس المجلد
+try:
+    from quantum_logic import QuantumEnergyOptimizer
+except ImportError:
+    st.error("System Error: quantum_logic module not found.")
+    st.stop()
 import time
 
-# Page config
+# --- Page Configuration (Professional Setup) ---
 st.set_page_config(
-    page_title="GazaGrid: Quantum Energy Optimizer",
-    page_icon="⚡",
+    page_title="GazaGrid Infrastructure Planning",
+    page_icon=None, # Removed Emoji
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# --- Professional Engineering Theme (CSS) ---
 st.markdown("""
 <style>
+    /* Global Font & Colors */
+    body {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        color: #1f2937;
+        background-color: #f9fafb;
+    }
+    
+    /* Header Styling */
     .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 0.5rem;
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #111827; /* Dark Navy */
+        margin-bottom: 0.2rem;
+        letter-spacing: -0.025em;
     }
     .subtitle {
-        color: #6b7280;
+        color: #6b7280; /* Cool Gray */
         font-size: 1.1rem;
-        margin-bottom: 2rem;
+        margin-bottom: 2.5rem;
+        font-weight: 400;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 1rem;
     }
+
+    /* Cards (Metrics & Info) */
     .metric-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        background-color: white;
+        border: 1px solid #e5e7eb;
         padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-    }
-    .stButton>button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        font-weight: 600;
-        border: none;
-        padding: 0.75rem 2rem;
         border-radius: 8px;
-        transition: all 0.3s;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        transition: box-shadow 0.3s ease;
+    }
+    .metric-card:hover {
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    .metric-label {
+        font-size: 0.875rem;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+    }
+    .metric-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #111827;
+        margin-top: 0.5rem;
+    }
+
+    /* Buttons */
+    .stButton>button {
+        background-color: #0f172a; /* Corporate Blue/Black */
+        color: white;
+        font-weight: 500;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        width: 100%;
+        transition: all 0.2s;
     }
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(102,126,234,0.4);
+        background-color: #1e293b;
+        transform: translateY(-1px);
     }
-    .info-box {
-        background: #f0f9ff;
-        border-left: 4px solid #3b82f6;
-        padding: 1rem;
-        border-radius: 4px;
-        margin: 1rem 0;
+
+    /* Sidebar Styling */
+    section[data-testid="stSidebar"] {
+        background-color: #f3f4f6;
+        border-right: 1px solid #e5e7eb;
+    }
+    
+    /* Custom Info Box */
+    .methodology-box {
+        background-color: #ffffff;
+        border-left: 4px solid #0f172a;
+        padding: 1.5rem;
+        border-radius: 0 8px 8px 0;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
+# --- Session State ---
 if 'optimized' not in st.session_state:
     st.session_state.optimized = False
 if 'selected_sites' not in st.session_state:
     st.session_state.selected_sites = []
 
+# --- Data Handling ---
 @st.cache_data
 def load_data():
-    """Load the Gaza energy data."""
+    """Load or Generate the Gaza energy data."""
     data_path = "gaza_energy_data.csv"
     if not os.path.exists(data_path):
-        # Generate data if not exists
-        from data_generator import generate_gaza_energy_data
-        df = generate_gaza_energy_data(45)
+        from data_generator import GazaDataGenerator # Assuming class name
+        # Fallback if generator logic is different, adapt as needed
+        # simple generation for demo
+        try:
+            gen = GazaDataGenerator()
+            df = gen.generate_realistic_data(45)
+        except:
+             # Basic fallback if module differs
+            st.error("Data Generator module error. Please ensure data_generator.py exists.")
+            st.stop()
         df.to_csv(data_path, index=False)
     else:
         df = pd.read_csv(data_path)
     return df
 
-def calculate_suitability_score(df, solar_weight, wind_weight, risk_weight, grid_weight):
-    """
-    Calculate suitability score using MCDA.
-    """
-    # Filter accessible sites only
+def calculate_suitability_score(df, solar_w, wind_w, risk_w, grid_w):
+    """MCDA Calculation Logic."""
+    # Filter accessible sites
     df_filtered = df[df['Accessibility'] == 1].copy()
     
-    # Normalize features to 0-1 range
-    solar_norm = (df_filtered['Solar_Irradiance'] - df_filtered['Solar_Irradiance'].min()) / \
-                 (df_filtered['Solar_Irradiance'].max() - df_filtered['Solar_Irradiance'].min())
+    # Normalization (Min-Max)
+    cols = {'Solar_Irradiance': solar_w, 'Wind_Speed': wind_w, 
+            'Risk_Score': -risk_w, 'Grid_Distance': -grid_w} # negative for penalties
     
-    wind_norm = (df_filtered['Wind_Speed'] - df_filtered['Wind_Speed'].min()) / \
-                (df_filtered['Wind_Speed'].max() - df_filtered['Wind_Speed'].min())
+    df_filtered['Suitability_Score'] = 0
     
-    risk_norm = (df_filtered['Risk_Score'] - df_filtered['Risk_Score'].min()) / \
-                (df_filtered['Risk_Score'].max() - df_filtered['Risk_Score'].min())
-    
-    grid_norm = (df_filtered['Grid_Distance'] - df_filtered['Grid_Distance'].min()) / \
-                (df_filtered['Grid_Distance'].max() - df_filtered['Grid_Distance'].min())
-    
-    # Calculate weighted score
-    df_filtered['Suitability_Score'] = (
-        solar_norm * solar_weight +
-        wind_norm * wind_weight -
-        risk_norm * risk_weight -
-        grid_norm * grid_weight
-    )
-    
-    # Normalize to 0-1
-    min_score = df_filtered['Suitability_Score'].min()
-    max_score = df_filtered['Suitability_Score'].max()
-    df_filtered['Suitability_Score'] = (df_filtered['Suitability_Score'] - min_score) / (max_score - min_score)
+    for col, weight in cols.items():
+        min_val = df_filtered[col].min()
+        max_val = df_filtered[col].max()
+        norm = (df_filtered[col] - min_val) / (max_val - min_val)
+        if weight < 0: # Penalty
+            df_filtered['Suitability_Score'] -= norm * abs(weight)
+        else: # Benefit
+            df_filtered['Suitability_Score'] += norm * weight
+            
+    # Scale to 0-100 for readability
+    s_min = df_filtered['Suitability_Score'].min()
+    s_max = df_filtered['Suitability_Score'].max()
+    df_filtered['Suitability_Score'] = ((df_filtered['Suitability_Score'] - s_min) / (s_max - s_min)) * 100
     
     return df_filtered
 
-def create_map(df, selected_indices=None):
-    """
-    Create Folium map with markers.
-    """
-    # Center of Gaza Strip
-    center_lat = 31.4167
-    center_lon = 34.3333
+def create_professional_map(df, selected_indices=None):
+    """Folium map with professional markers."""
+    center_lat, center_lon = 31.4167, 34.3333
     
     m = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=11,
-        tiles='OpenStreetMap'
+        tiles='CartoDB positron' # Cleaner, more professional map style
     )
     
-    # Add markers
     for idx, row in df.iterrows():
-        # Determine marker color
-        if selected_indices is not None and idx in selected_indices:
-            color = 'green'
-            icon = 'bolt'
-            popup_prefix = "⚡ SELECTED"
+        # Logic for styling
+        is_selected = selected_indices is not None and idx in selected_indices
+        
+        if is_selected:
+            color = '#10B981' # Emerald Green
+            radius = 8
+            fill_opacity = 0.9
+            tooltip_txt = "Selected Site"
         elif row['Accessibility'] == 0:
-            color = 'gray'
-            icon = 'ban'
-            popup_prefix = "🚫 RESTRICTED"
+            color = '#9CA3AF' # Gray
+            radius = 3
+            fill_opacity = 0.5
+            tooltip_txt = "Restricted Zone"
         elif row['Risk_Score'] > 7:
-            color = 'red'
-            icon = 'exclamation-triangle'
-            popup_prefix = "⚠️ HIGH RISK"
+            color = '#EF4444' # Red
+            radius = 4
+            fill_opacity = 0.6
+            tooltip_txt = "High Risk Zone"
         else:
-            color = 'blue'
-            icon = 'info-sign'
-            popup_prefix = "📍 CANDIDATE"
-        
-        # Create popup text
-        popup_html = f"""
-        <div style="font-family: Arial; font-size: 12px; width: 200px;">
-            <h4 style="margin: 0; color: {color};">{popup_prefix}</h4>
-            <hr style="margin: 5px 0;">
-            <b>Region:</b> {row['Region_ID']}<br>
-            <b>Location:</b> ({row['Latitude']:.4f}, {row['Longitude']:.4f})<br>
-            <b>Solar:</b> {row['Solar_Irradiance']:.2f} kWh/m²/day<br>
-            <b>Wind:</b> {row['Wind_Speed']:.2f} m/s<br>
-            <b>Risk Score:</b> {row['Risk_Score']}/10<br>
-            <b>Grid Distance:</b> {row['Grid_Distance']}m<br>
+            color = '#3B82F6' # Blue
+            radius = 5
+            fill_opacity = 0.6
+            tooltip_txt = "Candidate Site"
+
+        # Content for popup
+        popup_content = f"""
+        <div style="font-family: sans-serif; min-width: 150px;">
+            <strong style="color: {color}">{tooltip_txt}</strong><br>
+            <div style="margin-top: 5px; font-size: 12px; color: #374151;">
+                ID: {row['Region_ID']}<br>
+                Solar: {row['Solar_Irradiance']:.2f} kWh<br>
+                Risk Index: {row['Risk_Score']}/10
+            </div>
+        </div>
         """
-        
-        if 'Suitability_Score' in row:
-            popup_html += f"<b>Suitability:</b> {row['Suitability_Score']:.3f}<br>"
-        
-        popup_html += "</div>"
-        
-        folium.Marker(
+
+        folium.CircleMarker(
             location=[row['Latitude'], row['Longitude']],
-            popup=folium.Popup(popup_html, max_width=250),
-            icon=folium.Icon(color=color, icon=icon),
-            tooltip=row['Region_ID']
+            radius=radius,
+            color=color,
+            fill=True,
+            fill_color=color,
+            fill_opacity=fill_opacity,
+            popup=folium.Popup(popup_content, max_width=200),
+            tooltip=tooltip_txt
         ).add_to(m)
     
     return m
 
-def export_results(df, selected_indices, format='csv'):
-    """
-    Export selected sites data.
-    """
-    selected_df = df.loc[selected_indices].copy()
-    
-    if format == 'csv':
-        return selected_df.to_csv(index=False)
-    elif format == 'json':
-        return selected_df.to_json(orient='records', indent=2)
+def export_data(df, indices, file_format):
+    selected = df.loc[indices].copy()
+    if file_format == 'CSV':
+        return selected.to_csv(index=False)
+    return selected.to_json(orient='records', indent=2)
 
-# Main App
-st.markdown('<h1 class="main-header">⚡ GazaGrid: Resilient Quantum Energy Optimizer</h1>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">Hybrid AI-Quantum System for Optimal Renewable Energy Placement</p>', unsafe_allow_html=True)
+# --- Main Interface ---
 
-# Load data
+# Header Section
+st.markdown('<div class="main-header">GazaGrid Infrastructure Planning</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Advanced Site Selection System for Renewable Energy Deployment</div>', unsafe_allow_html=True)
+
 df = load_data()
 
-# Sidebar
+# --- Sidebar Configuration ---
 with st.sidebar:
-    st.header("🎛️ Configuration")
+    st.markdown("### System Configuration")
     
-    st.subheader("Optimization Parameters")
-    n_sites = st.slider(
-        "Number of Sites to Select",
-        min_value=3,
-        max_value=15,
-        value=5,
-        help="Select how many optimal locations to find"
-    )
+    st.markdown("#### Optimization Constraints")
+    n_sites = st.number_input("Target Number of Sites", min_value=1, max_value=20, value=5)
+    circuit_depth = st.select_slider("Computation Depth (QAOA Layers)", options=[1, 2, 3], value=2)
     
-    qaoa_layers = st.slider(
-        "QAOA Circuit Depth",
-        min_value=1,
-        max_value=3,
-        value=2,
-        help="Higher depth = better accuracy but slower"
-    )
+    st.markdown("#### Decision Weighting (MCDA)")
+    w_solar = st.slider("Solar Potential Importance", 0.0, 1.0, 0.5)
+    w_wind = st.slider("Wind Potential Importance", 0.0, 1.0, 0.3)
+    w_risk = st.slider("Risk Avoidance Factor", 0.0, 1.0, 0.4)
+    w_grid = st.slider("Grid Proximity Importance", 0.0, 0.01, 0.001, format="%.4f")
     
-    st.subheader("MCDA Weights")
-    st.markdown("*Adjust importance of each factor*")
+    st.markdown("---")
     
-    solar_weight = st.slider("☀️ Solar Irradiance", 0.0, 1.0, 0.5, 0.05)
-    wind_weight = st.slider("💨 Wind Speed", 0.0, 1.0, 0.3, 0.05)
-    risk_weight = st.slider("⚠️ Risk Penalty", 0.0, 1.0, 0.4, 0.05)
-    grid_weight = st.slider("📍 Grid Distance Penalty", 0.0, 0.01, 0.001, 0.001)
-    
-    st.divider()
-    
-    # Optimize button
-    if st.button("🚀 Run Quantum Optimization", use_container_width=True):
-        with st.spinner("Running QAOA...This may take 30-60 seconds..."):
-            # Calculate suitability scores
-            df_scored = calculate_suitability_score(df, solar_weight, wind_weight, risk_weight, grid_weight)
-            
-            # Prepare data for quantum optimizer
-            suitability_scores = df_scored['Suitability_Score'].values
-            coordinates = df_scored[['Latitude', 'Longitude']].values
-            risk_scores = df_scored['Risk_Score'].values
-            
-            # Progress placeholder
-            progress_text = st.empty()
-            
-            def update_progress(msg):
-                progress_text.info(msg)
-            
-            # Run quantum optimization
-            optimizer = QuantumEnergyOptimizer(
-                n_sites_to_select=n_sites,
-                qaoa_layers=qaoa_layers
-            )
-            
-            selected_relative, energy = optimizer.optimize(
-                suitability_scores,
-                coordinates,
-                risk_scores,
-                progress_callback=update_progress
-            )
-            
-            # Map back to original dataframe indices
-            selected_indices = df_scored.index[selected_relative].tolist()
-            
-            # Store in session state
-            st.session_state.optimized = True
-            st.session_state.selected_sites = selected_indices
-            st.session_state.df_scored = df_scored
-            st.session_state.energy = energy
-            
-            progress_text.success("✅ Optimization Complete!")
-            time.sleep(1)
-            progress_text.empty()
-            st.rerun()
-    
-    st.divider()
-    
-    # Export section
-    if st.session_state.optimized:
-        st.subheader("📥 Export Results")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            csv_data = export_results(st.session_state.df_scored, st.session_state.selected_sites, 'csv')
-            st.download_button(
-                label="CSV",
-                data=csv_data,
-                file_name="optimal_sites.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
-        
-        with col2:
-            json_data = export_results(st.session_state.df_scored, st.session_state.selected_sites, 'json')
-            st.download_button(
-                label="JSON",
-                data=json_data,
-                file_name="optimal_sites.json",
-                mime="application/json",
-                use_container_width=True
-            )
+    run_btn = st.button("Initialize Optimization Analysis")
 
-# Main content area
+# --- Logic Execution ---
+if run_btn:
+    with st.spinner("Processing geospatial data and executing quantum algorithms..."):
+        # 1. Classical Processing
+        df_scored = calculate_suitability_score(df, w_solar, w_wind, w_risk, w_grid)
+        
+        # 2. Quantum Processing
+        # Preparing numpy arrays for the optimizer
+        scores_array = df_scored['Suitability_Score'].values
+        coords_array = df_scored[['Latitude', 'Longitude']].values
+        risks_array = df_scored['Risk_Score'].values
+        
+        # Instantiate Optimizer
+        optimizer = QuantumEnergyOptimizer(n_sites_to_select=n_sites, qaoa_layers=circuit_depth)
+        
+        # Execute Solve
+        # Note: Removing progress_callback for cleaner UI unless strictly needed
+        selected_rel_indices, energy_val = optimizer.optimize(
+            scores_array, coords_array, risks_array
+        )
+        
+        # Map results
+        selected_indices = df_scored.index[selected_rel_indices].tolist()
+        
+        # Save State
+        st.session_state.optimized = True
+        st.session_state.selected_sites = selected_indices
+        st.session_state.df_scored = df_scored
+        st.session_state.energy_val = energy_val
+        
+        time.sleep(0.5) # UI smoothing
+        st.rerun()
+
+# --- Dashboard Content ---
+
 if not st.session_state.optimized:
-    # Initial state
-    st.markdown('<div class="info-box">', unsafe_allow_html=True)
+    # Methodology View
     st.markdown("""
-    ### 🎯 How It Works
+    <div class="methodology-box">
+        <h3 style="margin-top:0;">System Methodology</h3>
+        <p>This platform utilizes a hybrid quantum-classical approach to solve the facility location problem under conflict constraints.</p>
+        <ol>
+            <li><strong>Data Ingestion:</strong> Parsing geospatial coordinates, solar irradiance maps, and risk indices.</li>
+            <li><strong>Multi-Criteria Analysis:</strong> Normalizing conflicting objectives (Safety vs. Efficiency).</li>
+            <li><strong>Quantum Approximation:</strong> Utilizing QAOA to explore the solution space for optimal site configuration.</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
     
-    1. **Classical AI Processing**: Multi-Criteria Decision Analysis (MCDA) evaluates each location
-    2. **Quantum Optimization**: QAOA algorithm finds optimal site combinations
-    3. **Smart Selection**: Balances energy production, safety, and grid resilience
+    # Overview Metrics
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"""<div class="metric-card"><div class="metric-label">Total Candidate Sites</div><div class="metric-value">{len(df)}</div></div>""", unsafe_allow_html=True)
+    c2.markdown(f"""<div class="metric-card"><div class="metric-label">Viable Locations</div><div class="metric-value">{len(df[df['Accessibility']==1])}</div></div>""", unsafe_allow_html=True)
+    c3.markdown(f"""<div class="metric-card"><div class="metric-label">Avg. Solar Potential</div><div class="metric-value">{df['Solar_Irradiance'].mean():.2f} <span style="font-size:1rem">kWh</span></div></div>""", unsafe_allow_html=True)
     
-    **Configure parameters in the sidebar and click "Run Quantum Optimization" to begin.**
-    """)
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Show data preview
-    st.subheader("📊 Dataset Overview")
-    st.dataframe(df, use_container_width=True, height=400)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total Locations", len(df))
-    with col2:
-        st.metric("Accessible Sites", len(df[df['Accessibility'] == 1]))
-    with col3:
-        st.metric("High Risk Zones", len(df[df['Risk_Score'] > 7]))
-    
-    # Show initial map
-    st.subheader("🗺️ Gaza Strip - All Candidate Locations")
-    initial_map = create_map(df)
-    folium_static(initial_map, width=1400, height=600)
-    
+    st.markdown("### Geospatial Visualization")
+    st_map = create_professional_map(df)
+    folium_static(st_map, width=1400, height=500)
+
 else:
-    # Results view
-    df_scored = st.session_state.df_scored
-    selected_sites = st.session_state.selected_sites
+    # Results View
+    df_res = st.session_state.df_scored
+    sel_sites = st.session_state.selected_sites
+    sel_df = df_res.loc[sel_sites]
     
-    st.success(f"✅ Quantum optimization completed! {len(selected_sites)} optimal sites selected.")
+    st.markdown("### Optimization Results")
     
-    # Metrics
-    st.subheader("📈 Performance Metrics")
-    col1, col2, col3, col4 = st.columns(4)
+    # Key Metrics
+    c1, c2, c3, c4 = st.columns(4)
+    total_cap = sel_df['Solar_Irradiance'].sum() * 100 # Assumption factor
+    avg_suit = sel_df['Suitability_Score'].mean()
     
-    selected_df = df_scored.loc[selected_sites]
+    c1.markdown(f"""<div class="metric-card"><div class="metric-label">Selected Sites</div><div class="metric-value">{len(sel_sites)}</div></div>""", unsafe_allow_html=True)
+    c2.markdown(f"""<div class="metric-card"><div class="metric-label">Est. Generation Capacity</div><div class="metric-value">{total_cap:.0f} <span style="font-size:1rem">kW</span></div></div>""", unsafe_allow_html=True)
+    c3.markdown(f"""<div class="metric-card"><div class="metric-label">Risk Index (Avg)</div><div class="metric-value">{sel_df['Risk_Score'].mean():.1f}<span style="font-size:1rem">/10</span></div></div>""", unsafe_allow_html=True)
+    c4.markdown(f"""<div class="metric-card"><div class="metric-label">Optimization Score</div><div class="metric-value">{avg_suit:.1f}<span style="font-size:1rem">%</span></div></div>""", unsafe_allow_html=True)
     
-    total_solar = selected_df['Solar_Irradiance'].sum()
-    total_wind = selected_df['Wind_Speed'].sum()
-    avg_risk = selected_df['Risk_Score'].mean()
-    avg_suitability = selected_df['Suitability_Score'].mean()
+    # Map
+    st.markdown("### Strategic Deployment Map")
+    res_map = create_professional_map(df_res, sel_sites)
+    folium_static(res_map, width=1400, height=500)
     
+    # Table & Export
+    st.markdown("### Location Data Specification")
+    
+    # Clean table for report
+    clean_table = sel_df[['Region_ID', 'Latitude', 'Longitude', 'Solar_Irradiance', 'Risk_Score', 'Suitability_Score']].copy()
+    clean_table.columns = ['Region ID', 'Lat', 'Lon', 'Solar (kWh)', 'Risk Factor', 'Score']
+    st.dataframe(clean_table, use_container_width=True, hide_index=True)
+    
+    col1, col2 = st.columns([1, 5])
     with col1:
-        st.metric("Total Solar Potential", f"{total_solar:.1f} kWh/m²/day")
-    with col2:
-        st.metric("Total Wind Potential", f"{total_wind:.1f} m/s")
-    with col3:
-        st.metric("Average Risk Score", f"{avg_risk:.1f}/10")
-    with col4:
-        st.metric("Avg Suitability", f"{avg_suitability:.3f}")
-    
-    # Map with selected sites
-    st.subheader("🗺️ Optimal Site Locations")
-    result_map = create_map(df_scored, selected_sites)
-    folium_static(result_map, width=1400, height=600)
-    
-    # Selected sites table
-    st.subheader("📋 Selected Sites Details")
-    display_df = selected_df[[
-        'Region_ID', 'Latitude', 'Longitude', 'Solar_Irradiance',
-        'Wind_Speed', 'Risk_Score', 'Grid_Distance', 'Suitability_Score'
-    ]].copy()
-    display_df['Suitability_Score'] = display_df['Suitability_Score'].round(4)
-    st.dataframe(display_df, use_container_width=True)
-    
-    # Analysis
-    st.subheader("🔍 Distribution Analysis")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**Regional Distribution:**")
-        region_dist = selected_df['Region_ID'].apply(lambda x: x.split('_')[0] + '_' + x.split('_')[1]).value_counts()
-        for region, count in region_dist.items():
-            st.write(f"- {region}: {count} site(s)")
-    
-    with col2:
-        st.markdown("**Risk Assessment:**")
-        low_risk = len(selected_df[selected_df['Risk_Score'] <= 3])
-        med_risk = len(selected_df[(selected_df['Risk_Score'] > 3) & (selected_df['Risk_Score'] <= 7)])
-        high_risk = len(selected_df[selected_df['Risk_Score'] > 7])
-        st.write(f"- Low Risk (0-3): {low_risk} sites")
-        st.write(f"- Medium Risk (4-7): {med_risk} sites")
-        st.write(f"- High Risk (8-10): {high_risk} sites")
+        csv = export_data(df_res, sel_sites, 'CSV')
+        st.download_button("Download Report (CSV)", csv, "optimization_report.csv", "text/csv")
 
 # Footer
-st.divider()
+st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: #6b7280; padding: 2rem;">
-    <p><b>GazaGrid Quantum Energy Optimizer</b> | Powered by Qiskit QAOA | Built for Resilience</p>
-    <p style="font-size: 0.9rem;">🌍 Optimizing renewable energy for a sustainable future</p>
+<div style="text-align: center; font-size: 0.8rem; color: #9ca3af;">
+    GazaGrid Infrastructure Planning System v1.0 | Research Prototype
 </div>
 """, unsafe_allow_html=True)
